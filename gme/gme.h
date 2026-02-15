@@ -191,6 +191,12 @@ BLARGG_EXPORT void gme_mute_voices( Music_Emu*, int muting_mask );
 /* Available since 0.6.4 */
 BLARGG_EXPORT void gme_disable_echo( Music_Emu*, int disable );
 
+/* Set SPC interpolation mode:
+ * -2 nearest, -1 linear, 0 gaussian, 1 cubic, 2 sinc.
+ * Has no effect for non-SPC tracks.
+ */
+BLARGG_EXPORT void gme_set_spc_interpolation( Music_Emu*, int level );
+
 /* Frequency equalizer parameters (see gme.txt) */
 /* Implementers: If modified, also adjust Music_Emu::make_equalizer as needed */
 typedef struct gme_equalizer_t

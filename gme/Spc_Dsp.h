@@ -53,6 +53,10 @@ public:
 
 	void disable_echo( bool disable = true );
 
+	// SPC interpolation mode:
+	// -2 nearest, -1 linear, 0 gaussian (default), 1 cubic, 2 sinc
+	void interpolation_level( int level = 0 );
+
 // State
 
 	// Resets DSP and uses supplied values to initialize registers
@@ -142,6 +146,7 @@ private:
 		int mute_mask;
 		int surround_threshold;
 		int echo_enable;
+		int interpolation_level;
 		sample_t* out;
 		sample_t* out_end;
 		sample_t* out_begin;
@@ -212,6 +217,13 @@ inline void Spc_Dsp::disable_surround( bool disable )
 inline void Spc_Dsp::disable_echo( bool disable )
 {
 	m.echo_enable = !disable;
+}
+
+inline void Spc_Dsp::interpolation_level( int level )
+{
+	if ( level < -2 ) level = -2;
+	if ( level > 2 ) level = 2;
+	m.interpolation_level = level;
 }
 
 #define SPC_NO_COPY_STATE_FUNCS 1

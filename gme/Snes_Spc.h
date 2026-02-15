@@ -65,6 +65,9 @@ public:
 
 	void disable_echo( bool disable = true );
 
+	// -2 nearest, -1 linear, 0 gaussian, 1 cubic, 2 sinc
+	void interpolation_level( int level = 0 );
+
 	// Sets tempo, where tempo_unit = normal, tempo_unit / 2 = half speed, etc.
 	static const unsigned int tempo_unit = 0x100;
 	void set_tempo( int );
@@ -279,6 +282,8 @@ inline void Snes_Spc::mute_voices( int mask ) { dsp.mute_voices( mask ); }
 inline void Snes_Spc::disable_surround( bool disable ) { dsp.disable_surround( disable ); }
 
 inline void Snes_Spc::disable_echo( bool disable ) { dsp.disable_echo( disable ); }
+
+inline void Snes_Spc::interpolation_level( int level ) { dsp.interpolation_level( level ); }
 
 #if !SPC_NO_COPY_STATE_FUNCS
 inline bool Snes_Spc::check_kon() { return dsp.check_kon(); }

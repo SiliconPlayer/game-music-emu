@@ -3,6 +3,7 @@
 #include "Spc_Dsp.h"
 
 #include "blargg_endian.h"
+#include <cmath>
 #include <string.h>
 
 /* Copyright (C) 2007 Shay Green. This module is free software; you
@@ -126,6 +127,57 @@ static short const interleved_gauss [512] =
    0, 434,   0, 430,   0, 426,   0, 422,   0, 418,   0, 414,   0, 410,   0, 405,
    0, 401,   0, 397,   0, 393,   0, 389,   0, 385,   0, 381,   0, 378,   0, 374,
 };
+
+static inline int interpolate_linear_sample( int const* in, int interp_pos )
+{
+	int const fract = interp_pos & 0x0FFF;
+	int out = ((0x1000 - fract) * in [0] + fract * in [1]) >> 12;
+	return out & ~1;
+}
+
+static inline int interpolate_nearest_sample( int const* in )
+{
+	return in [0] & ~1;
+}
+
+static inline int interpolate_cubic_sample( int const* in, int interp_pos )
+{
+	double const t = static_cast<double>(interp_pos & 0x0FFF) / 4096.0;
+	double const p0 = in [0];
+	double const p1 = in [1];
+	double const p2 = in [2];
+	double const p3 = in [3];
+	double const a0 = (-0.5 * p0) + (1.5 * p1) - (1.5 * p2) + (0.5 * p3);
+	double const a1 = p0 - (2.5 * p1) + (2.0 * p2) - (0.5 * p3);
+	double const a2 = (-0.5 * p0) + (0.5 * p2);
+	double const a3 = p1;
+	int out = static_cast<int>(std::lrint((((a0 * t) + a1) * t + a2) * t + a3));
+	CLAMP16( out );
+	return out & ~1;
+}
+
+static inline int interpolate_sinc_sample( int const* in, int interp_pos )
+{
+	double const t = static_cast<double>(interp_pos & 0x0FFF) / 4096.0;
+	double sum = 0.0;
+	double norm = 0.0;
+	for ( int i = 0; i < 8; ++i )
+	{
+		double const x = (static_cast<double>(i) - 3.0) - t;
+		double const pix = 3.14159265358979323846 * x;
+		double const sinc = (std::fabs(x) < 1e-9) ? 1.0 : std::sin(pix) / pix;
+		double const pixw = pix / 4.0;
+		double const window = (std::fabs(x) < 4.0) ? ((std::fabs(x) < 1e-9) ? 1.0 : std::sin(pixw) / pixw) : 0.0;
+		double const coeff = sinc * window;
+		sum += static_cast<double>(in [i]) * coeff;
+		norm += coeff;
+	}
+	if ( std::fabs(norm) > 1e-12 )
+		sum /= norm;
+	int out = static_cast<int>(std::lrint(sum));
+	CLAMP16( out );
+	return out & ~1;
+}
 
 
 //// Counters
@@ -285,41 +337,59 @@ void Spc_Dsp::run( int clock_count )
 
 			int env = v->env;
 
-			// Gaussian interpolation
+			// Interpolation (gaussian default, optional linear/cubic/sinc/nearest)
 			{
 				int output = 0;
 				VREG(v_regs,envx) = (uint8_t) (env >> 4);
 				if ( env )
 				{
-					// Make pointers into gaussian based on fractional position between samples
-					int offset = (unsigned) v->interp_pos >> 3 & 0x1FE;
-					short const* fwd = interleved_gauss       + offset;
-					short const* rev = interleved_gauss + 510 - offset; // mirror left half of gaussian
-
 					int const* in = &v->buf_pos [(unsigned) v->interp_pos >> 12];
-
-					if ( !(slow_gaussian & vbit) ) // 99%
+					if ( m.interpolation_level == 0 )
 					{
-						// Faster approximation when exact sample value isn't necessary for pitch mod
-						output = (fwd [0] * in [0] +
-						          fwd [1] * in [1] +
-						          rev [1] * in [2] +
-						          rev [0] * in [3]) >> 11;
-						output = (output * env) >> 11;
+						// Make pointers into gaussian based on fractional position between samples
+						int offset = (unsigned) v->interp_pos >> 3 & 0x1FE;
+						short const* fwd = interleved_gauss       + offset;
+						short const* rev = interleved_gauss + 510 - offset; // mirror left half of gaussian
+
+						if ( !(slow_gaussian & vbit) ) // 99%
+						{
+							// Faster approximation when exact sample value isn't necessary for pitch mod
+							output = (fwd [0] * in [0] +
+							          fwd [1] * in [1] +
+							          rev [1] * in [2] +
+							          rev [0] * in [3]) >> 11;
+							output = (output * env) >> 11;
+						}
+						else
+						{
+							output = (int16_t) (m.noise * 2);
+							if ( !(REG(non) & vbit) )
+							{
+								output  = (fwd [0] * in [0]) >> 11;
+								output += (fwd [1] * in [1]) >> 11;
+								output += (rev [1] * in [2]) >> 11;
+								output = (int16_t) output;
+								output += (rev [0] * in [3]) >> 11;
+
+								CLAMP16( output );
+								output &= ~1;
+							}
+							output = (output * env) >> 11 & ~1;
+						}
 					}
 					else
 					{
 						output = (int16_t) (m.noise * 2);
 						if ( !(REG(non) & vbit) )
 						{
-							output  = (fwd [0] * in [0]) >> 11;
-							output += (fwd [1] * in [1]) >> 11;
-							output += (rev [1] * in [2]) >> 11;
-							output = (int16_t) output;
-							output += (rev [0] * in [3]) >> 11;
-
-							CLAMP16( output );
-							output &= ~1;
+							switch ( m.interpolation_level )
+							{
+								case -2: output = interpolate_nearest_sample( in ); break;
+								case -1: output = interpolate_linear_sample( in, v->interp_pos ); break;
+								case 1:  output = interpolate_cubic_sample( in, v->interp_pos ); break;
+								case 2:  output = interpolate_sinc_sample( in, v->interp_pos ); break;
+								default: break;
+							}
 						}
 						output = (output * env) >> 11 & ~1;
 					}
@@ -669,6 +739,7 @@ void Spc_Dsp::init( void* ram_64k )
 	mute_voices( 0 );
 	disable_surround( false );
 	disable_echo( false );
+	interpolation_level( 0 );
 	set_output( 0, 0 );
 	reset();
 
