@@ -5,6 +5,7 @@
 #define NSF_EMU_H
 
 #include "Classic_Emu.h"
+#include "Multi_Buffer.h"
 #include "Nes_Apu.h"
 #include "Nes_Cpu.h"
 
@@ -52,6 +53,10 @@ public:
 	Nsf_Emu();
 	~Nsf_Emu();
 	Nes_Apu* apu_() { return &apu; }
+	bool has_vrc6() const { return vrc6 != 0; }
+	void set_vrc6_scope_mute_mask_( int mask );
+	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
+	void clear_vrc6_scope_();
 protected:
 	blargg_err_t track_info_( track_info_t*, int track ) const;
 	blargg_err_t load_( Data_Reader& );
@@ -99,8 +104,15 @@ private:
 	class Nes_Vrc7_Apu*  vrc7;
 	Nes_Apu apu;
 	blargg_vector<const char*> apu_names;
+	enum { vrc6_scope_channel_count = 3 };
+	Mono_Buffer vrc6_scope_buffers [vrc6_scope_channel_count];
+	blargg_vector<sample_t> vrc6_scope_scratch;
+	bool vrc6_scope_ready;
+	int vrc6_scope_mute_mask;
 	static int pcm_read( void*, nes_addr_t );
 	blargg_err_t init_sound();
+	blargg_err_t init_vrc6_scope_();
+	void route_vrc6_scope_outputs_();
 
 	header_t header_;
 

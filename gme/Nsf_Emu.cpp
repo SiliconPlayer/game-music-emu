@@ -65,6 +65,8 @@ Nsf_Emu::Nsf_Emu()
 	apu.dmc_reader( pcm_read, this );
 	Music_Emu::set_equalizer( nes_eq );
 	set_gain( 1.4 );
+	vrc6_scope_ready = false;
+	vrc6_scope_mute_mask = 0;
 	memset( unmapped_code, Nes_Cpu::bad_opcode, sizeof unmapped_code );
 }
 
@@ -112,6 +114,116 @@ static void copy_nsf_fields( Nsf_Emu::header_t const& h, track_info_t* out )
 blargg_err_t Nsf_Emu::track_info_( track_info_t* out, int ) const
 {
 	copy_nsf_fields( header_, out );
+	return 0;
+}
+
+blargg_err_t Nsf_Emu::init_vrc6_scope_()
+{
+	if ( !vrc6 )
+		return "NSF VRC6 scope unavailable";
+
+	if ( !vrc6_scope_ready )
+	{
+		for ( int i = 0; i < vrc6_scope_channel_count; ++i )
+		{
+			RETURN_ERR( vrc6_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
+			vrc6_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			vrc6_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+		vrc6_scope_ready = true;
+	}
+	else
+	{
+		for ( int i = 0; i < vrc6_scope_channel_count; ++i )
+		{
+			vrc6_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			vrc6_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+	}
+
+	vrc6->treble_eq( equalizer().treble );
+	route_vrc6_scope_outputs_();
+	return 0;
+}
+
+void Nsf_Emu::set_vrc6_scope_mute_mask_( int mask )
+{
+	vrc6_scope_mute_mask = mask & 0x07;
+	if ( vrc6_scope_ready )
+		route_vrc6_scope_outputs_();
+}
+
+void Nsf_Emu::route_vrc6_scope_outputs_()
+{
+	if ( !vrc6 )
+		return;
+
+	apu.output( NULL );
+	if ( namco ) namco->output( NULL );
+	if ( fme7  ) fme7 ->output( NULL );
+	if ( fds   ) fds  ->osc_output( 0, NULL );
+	if ( mmc5  ) mmc5 ->output( NULL );
+	if ( vrc7  ) vrc7 ->set_output( NULL );
+
+	vrc6->osc_output( 0, (vrc6_scope_mute_mask & 0x02) ? NULL : vrc6_scope_buffers [1].center() );
+	vrc6->osc_output( 1, (vrc6_scope_mute_mask & 0x04) ? NULL : vrc6_scope_buffers [2].center() );
+	vrc6->osc_output( 2, (vrc6_scope_mute_mask & 0x01) ? NULL : vrc6_scope_buffers [0].center() );
+}
+
+void Nsf_Emu::clear_vrc6_scope_()
+{
+	if ( !vrc6_scope_ready )
+		return;
+	for ( int i = 0; i < vrc6_scope_channel_count; ++i )
+		vrc6_scope_buffers [i].clear();
+}
+
+blargg_err_t Nsf_Emu::play_vrc6_scope_( long frame_count, sample_t* out )
+{
+	if ( !out || frame_count <= 0 )
+		return 0;
+
+	RETURN_ERR( init_vrc6_scope_() );
+
+	if ( vrc6_scope_scratch.resize( frame_count * vrc6_scope_channel_count ) )
+		return "Out of memory";
+
+	long remain = frame_count;
+	while ( remain > 0 )
+	{
+		long avail = vrc6_scope_buffers [0].samples_avail();
+		if ( avail > remain )
+			avail = remain;
+
+		if ( avail == 0 )
+		{
+			blip_time_t clocks_emulated = vrc6_scope_buffers [0].center()->count_clocks( remain );
+			if ( clocks_emulated <= 0 )
+				clocks_emulated = (int32_t) vrc6_scope_buffers [0].length() * clock_rate_ / 1000;
+
+			int msec = int( clocks_emulated * 1000 / clock_rate_ );
+			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
+			for ( int i = 0; i < vrc6_scope_channel_count; ++i )
+				vrc6_scope_buffers [i].end_frame( clocks_emulated );
+			continue;
+		}
+
+		for ( int channel = 0; channel < vrc6_scope_channel_count; ++channel )
+		{
+			vrc6_scope_buffers [channel].read_samples(
+					&vrc6_scope_scratch [channel * frame_count],
+					avail
+			);
+		}
+
+		for ( long frame = 0; frame < avail; ++frame )
+		{
+			for ( int channel = 0; channel < vrc6_scope_channel_count; ++channel )
+				*out++ = vrc6_scope_scratch [channel * frame_count + frame];
+		}
+		remain -= avail;
+	}
+
 	return 0;
 }
 
