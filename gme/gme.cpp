@@ -446,6 +446,50 @@ int       gme_nsf_has_mmc5   ( Music_Emu const* me )
 
 	return STATIC_CAST(Nsf_Emu const*, me)->has_mmc5() ? 1 : 0;
 }
+int       gme_nsf_has_apu_scope( Music_Emu const* me )
+{
+	if ( !me )
+		return 0;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return 0;
+
+	return STATIC_CAST(Nsf_Emu const*, me)->has_apu_scope() ? 1 : 0;
+}
+void gme_set_nsf_apu_scope_mute_mask( Music_Emu* me, int mask )
+{
+	if ( !me )
+		return;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return;
+
+	STATIC_CAST(Nsf_Emu*, me)->set_apu_scope_mute_mask_( mask );
+}
+gme_err_t gme_play_nsf_apu_scope( Music_Emu* me, int frame_count, short out [] )
+{
+	if ( !me )
+		return "Invalid emulator";
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return "NSF APU scope unavailable";
+
+	return STATIC_CAST(Nsf_Emu*, me)->play_apu_scope_( frame_count, out );
+}
+void gme_clear_nsf_apu_scope( Music_Emu* me )
+{
+	if ( !me )
+		return;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return;
+
+	STATIC_CAST(Nsf_Emu*, me)->clear_apu_scope_();
+}
 void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu* me, int mask )
 {
 	if ( !me )

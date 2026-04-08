@@ -260,6 +260,21 @@ BLARGG_EXPORT int gme_nsf_has_vrc6( Music_Emu const* );
 /* True if this NSF/NSFE emulator currently has MMC5 expansion audio active. */
 BLARGG_EXPORT int gme_nsf_has_mmc5( Music_Emu const* );
 
+/* The base 2A03 APU scope path is always available for NSF/NSFE emulators. */
+BLARGG_EXPORT int gme_nsf_has_apu_scope( Music_Emu const* );
+
+/* Set the mute mask for the dedicated NSF 2A03 APU scope path in voice-name order:
+ * bit 0 = Square 1, bit 1 = Square 2, bit 2 = Triangle, bit 3 = Noise, bit 4 = DMC. */
+BLARGG_EXPORT void gme_set_nsf_apu_scope_mute_mask( Music_Emu*, int mask );
+
+/* Generate frame_count mono scope samples for the five 2A03 APU voices, advancing the
+ * emulator like gme_play(). Output layout is frame-major in voice-name order:
+ * [Square 1, Square 2, Triangle, Noise, DMC]. Intended for dedicated shadow emulators. */
+BLARGG_EXPORT gme_err_t gme_play_nsf_apu_scope( Music_Emu*, int frame_count, short out [] );
+
+/* Clear any unread samples queued by gme_play_nsf_apu_scope() on a dedicated shadow emulator. */
+BLARGG_EXPORT void gme_clear_nsf_apu_scope( Music_Emu* );
+
 /* Set the mute mask for the dedicated NSF VRC6 scope path in voice-name order:
  * bit 0 = Saw Wave, bit 1 = Square 3, bit 2 = Square 4. */
 BLARGG_EXPORT void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu*, int mask );

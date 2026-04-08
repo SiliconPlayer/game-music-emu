@@ -55,6 +55,10 @@ public:
 	Nes_Apu* apu_() { return &apu; }
 	bool has_vrc6() const { return vrc6 != 0; }
 	bool has_mmc5() const { return mmc5 != 0; }
+	bool has_apu_scope() const { return true; }
+	void set_apu_scope_mute_mask_( int mask );
+	blargg_err_t play_apu_scope_( long frame_count, sample_t* out );
+	void clear_apu_scope_();
 	void set_vrc6_scope_mute_mask_( int mask );
 	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
 	void clear_vrc6_scope_();
@@ -108,6 +112,11 @@ private:
 	class Nes_Vrc7_Apu*  vrc7;
 	Nes_Apu apu;
 	blargg_vector<const char*> apu_names;
+	enum { apu_scope_channel_count = 5 };
+	Mono_Buffer apu_scope_buffers [apu_scope_channel_count];
+	blargg_vector<sample_t> apu_scope_scratch;
+	bool apu_scope_ready;
+	int apu_scope_mute_mask;
 	enum { vrc6_scope_channel_count = 3 };
 	Mono_Buffer vrc6_scope_buffers [vrc6_scope_channel_count];
 	blargg_vector<sample_t> vrc6_scope_scratch;
@@ -120,8 +129,10 @@ private:
 	int mmc5_scope_mute_mask;
 	static int pcm_read( void*, nes_addr_t );
 	blargg_err_t init_sound();
+	blargg_err_t init_apu_scope_();
 	blargg_err_t init_vrc6_scope_();
 	blargg_err_t init_mmc5_scope_();
+	void route_apu_scope_outputs_();
 	void route_vrc6_scope_outputs_();
 	void route_mmc5_scope_outputs_();
 

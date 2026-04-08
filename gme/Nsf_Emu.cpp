@@ -65,6 +65,8 @@ Nsf_Emu::Nsf_Emu()
 	apu.dmc_reader( pcm_read, this );
 	Music_Emu::set_equalizer( nes_eq );
 	set_gain( 1.4 );
+	apu_scope_ready = false;
+	apu_scope_mute_mask = 0;
 	vrc6_scope_ready = false;
 	vrc6_scope_mute_mask = 0;
 	mmc5_scope_ready = false;
@@ -145,6 +147,109 @@ blargg_err_t Nsf_Emu::init_vrc6_scope_()
 
 	vrc6->treble_eq( equalizer().treble );
 	route_vrc6_scope_outputs_();
+	return 0;
+}
+
+blargg_err_t Nsf_Emu::init_apu_scope_()
+{
+	if ( !apu_scope_ready )
+	{
+		for ( int i = 0; i < apu_scope_channel_count; ++i )
+		{
+			RETURN_ERR( apu_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
+			apu_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			apu_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+		apu_scope_ready = true;
+	}
+	else
+	{
+		for ( int i = 0; i < apu_scope_channel_count; ++i )
+		{
+			apu_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			apu_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+	}
+
+	apu.treble_eq( equalizer().treble );
+	route_apu_scope_outputs_();
+	return 0;
+}
+
+void Nsf_Emu::set_apu_scope_mute_mask_( int mask )
+{
+	apu_scope_mute_mask = mask & 0x1F;
+	if ( apu_scope_ready )
+		route_apu_scope_outputs_();
+}
+
+void Nsf_Emu::route_apu_scope_outputs_()
+{
+	if ( namco ) namco->output( NULL );
+	if ( fme7  ) fme7 ->output( NULL );
+	if ( fds   ) fds  ->osc_output( 0, NULL );
+	if ( mmc5  ) mmc5 ->output( NULL );
+	if ( vrc6  ) vrc6 ->output( NULL );
+	if ( vrc7  ) vrc7 ->set_output( NULL );
+
+	for ( int i = 0; i < apu_scope_channel_count; ++i )
+		apu.osc_output( i, (apu_scope_mute_mask & (1 << i)) ? NULL : apu_scope_buffers [i].center() );
+}
+
+void Nsf_Emu::clear_apu_scope_()
+{
+	if ( !apu_scope_ready )
+		return;
+	for ( int i = 0; i < apu_scope_channel_count; ++i )
+		apu_scope_buffers [i].clear();
+}
+
+blargg_err_t Nsf_Emu::play_apu_scope_( long frame_count, sample_t* out )
+{
+	if ( !out || frame_count <= 0 )
+		return 0;
+
+	RETURN_ERR( init_apu_scope_() );
+
+	if ( apu_scope_scratch.resize( frame_count * apu_scope_channel_count ) )
+		return "Out of memory";
+
+	long remain = frame_count;
+	while ( remain > 0 )
+	{
+		long avail = apu_scope_buffers [0].samples_avail();
+		if ( avail > remain )
+			avail = remain;
+
+		if ( avail == 0 )
+		{
+			blip_time_t clocks_emulated = apu_scope_buffers [0].center()->count_clocks( remain );
+			if ( clocks_emulated <= 0 )
+				clocks_emulated = (int32_t) apu_scope_buffers [0].length() * clock_rate_ / 1000;
+
+			int msec = int( clocks_emulated * 1000 / clock_rate_ );
+			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
+			for ( int i = 0; i < apu_scope_channel_count; ++i )
+				apu_scope_buffers [i].end_frame( clocks_emulated );
+			continue;
+		}
+
+		for ( int channel = 0; channel < apu_scope_channel_count; ++channel )
+		{
+			apu_scope_buffers [channel].read_samples(
+					&apu_scope_scratch [channel * frame_count],
+					avail
+			);
+		}
+
+		for ( long frame = 0; frame < avail; ++frame )
+		{
+			for ( int channel = 0; channel < apu_scope_channel_count; ++channel )
+				*out++ = apu_scope_scratch [channel * frame_count + frame];
+		}
+		remain -= avail;
+	}
+
 	return 0;
 }
 
