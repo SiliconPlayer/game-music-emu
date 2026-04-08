@@ -435,6 +435,17 @@ int       gme_nsf_has_vrc6   ( Music_Emu const* me )
 
 	return STATIC_CAST(Nsf_Emu const*, me)->has_vrc6() ? 1 : 0;
 }
+int       gme_nsf_has_mmc5   ( Music_Emu const* me )
+{
+	if ( !me )
+		return 0;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return 0;
+
+	return STATIC_CAST(Nsf_Emu const*, me)->has_mmc5() ? 1 : 0;
+}
 void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu* me, int mask )
 {
 	if ( !me )
@@ -467,6 +478,39 @@ void gme_clear_nsf_vrc6_scope( Music_Emu* me )
 		return;
 
 	STATIC_CAST(Nsf_Emu*, me)->clear_vrc6_scope_();
+}
+void gme_set_nsf_mmc5_scope_mute_mask( Music_Emu* me, int mask )
+{
+	if ( !me )
+		return;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return;
+
+	STATIC_CAST(Nsf_Emu*, me)->set_mmc5_scope_mute_mask_( mask );
+}
+gme_err_t gme_play_nsf_mmc5_scope( Music_Emu* me, int frame_count, short out [] )
+{
+	if ( !me )
+		return "Invalid emulator";
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return "NSF MMC5 scope unavailable";
+
+	return STATIC_CAST(Nsf_Emu*, me)->play_mmc5_scope_( frame_count, out );
+}
+void gme_clear_nsf_mmc5_scope( Music_Emu* me )
+{
+	if ( !me )
+		return;
+
+	const gme_type_t type = me->type();
+	if ( type != gme_nsf_type && type != gme_nsfe_type )
+		return;
+
+	STATIC_CAST(Nsf_Emu*, me)->clear_mmc5_scope_();
 }
 
 void      gme_set_equalizer  ( Music_Emu* me, gme_equalizer_t const* eq )

@@ -54,9 +54,13 @@ public:
 	~Nsf_Emu();
 	Nes_Apu* apu_() { return &apu; }
 	bool has_vrc6() const { return vrc6 != 0; }
+	bool has_mmc5() const { return mmc5 != 0; }
 	void set_vrc6_scope_mute_mask_( int mask );
 	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
 	void clear_vrc6_scope_();
+	void set_mmc5_scope_mute_mask_( int mask );
+	blargg_err_t play_mmc5_scope_( long frame_count, sample_t* out );
+	void clear_mmc5_scope_();
 protected:
 	blargg_err_t track_info_( track_info_t*, int track ) const;
 	blargg_err_t load_( Data_Reader& );
@@ -109,10 +113,17 @@ private:
 	blargg_vector<sample_t> vrc6_scope_scratch;
 	bool vrc6_scope_ready;
 	int vrc6_scope_mute_mask;
+	enum { mmc5_scope_channel_count = 3 };
+	Mono_Buffer mmc5_scope_buffers [mmc5_scope_channel_count];
+	blargg_vector<sample_t> mmc5_scope_scratch;
+	bool mmc5_scope_ready;
+	int mmc5_scope_mute_mask;
 	static int pcm_read( void*, nes_addr_t );
 	blargg_err_t init_sound();
 	blargg_err_t init_vrc6_scope_();
+	blargg_err_t init_mmc5_scope_();
 	void route_vrc6_scope_outputs_();
+	void route_mmc5_scope_outputs_();
 
 	header_t header_;
 

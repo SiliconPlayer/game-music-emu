@@ -67,6 +67,8 @@ Nsf_Emu::Nsf_Emu()
 	set_gain( 1.4 );
 	vrc6_scope_ready = false;
 	vrc6_scope_mute_mask = 0;
+	mmc5_scope_ready = false;
+	mmc5_scope_mute_mask = 0;
 	memset( unmapped_code, Nes_Cpu::bad_opcode, sizeof unmapped_code );
 }
 
@@ -220,6 +222,117 @@ blargg_err_t Nsf_Emu::play_vrc6_scope_( long frame_count, sample_t* out )
 		{
 			for ( int channel = 0; channel < vrc6_scope_channel_count; ++channel )
 				*out++ = vrc6_scope_scratch [channel * frame_count + frame];
+		}
+		remain -= avail;
+	}
+
+	return 0;
+}
+
+blargg_err_t Nsf_Emu::init_mmc5_scope_()
+{
+	if ( !mmc5 )
+		return "NSF MMC5 scope unavailable";
+
+	if ( !mmc5_scope_ready )
+	{
+		for ( int i = 0; i < mmc5_scope_channel_count; ++i )
+		{
+			RETURN_ERR( mmc5_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
+			mmc5_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			mmc5_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+		mmc5_scope_ready = true;
+	}
+	else
+	{
+		for ( int i = 0; i < mmc5_scope_channel_count; ++i )
+		{
+			mmc5_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
+			mmc5_scope_buffers [i].bass_freq( (int) equalizer().bass );
+		}
+	}
+
+	mmc5->treble_eq( equalizer().treble );
+	route_mmc5_scope_outputs_();
+	return 0;
+}
+
+void Nsf_Emu::set_mmc5_scope_mute_mask_( int mask )
+{
+	mmc5_scope_mute_mask = mask & 0x07;
+	if ( mmc5_scope_ready )
+		route_mmc5_scope_outputs_();
+}
+
+void Nsf_Emu::route_mmc5_scope_outputs_()
+{
+	if ( !mmc5 )
+		return;
+
+	apu.output( NULL );
+	if ( namco ) namco->output( NULL );
+	if ( fme7  ) fme7 ->output( NULL );
+	if ( fds   ) fds  ->osc_output( 0, NULL );
+	if ( vrc6  ) vrc6 ->output( NULL );
+	if ( vrc7  ) vrc7 ->set_output( NULL );
+	mmc5->output( NULL );
+
+	mmc5->osc_output( 0, (mmc5_scope_mute_mask & 0x01) ? NULL : mmc5_scope_buffers [0].center() );
+	mmc5->osc_output( 1, (mmc5_scope_mute_mask & 0x02) ? NULL : mmc5_scope_buffers [1].center() );
+	mmc5->osc_output( 2, (mmc5_scope_mute_mask & 0x04) ? NULL : mmc5_scope_buffers [2].center() );
+}
+
+void Nsf_Emu::clear_mmc5_scope_()
+{
+	if ( !mmc5_scope_ready )
+		return;
+	for ( int i = 0; i < mmc5_scope_channel_count; ++i )
+		mmc5_scope_buffers [i].clear();
+}
+
+blargg_err_t Nsf_Emu::play_mmc5_scope_( long frame_count, sample_t* out )
+{
+	if ( !out || frame_count <= 0 )
+		return 0;
+
+	RETURN_ERR( init_mmc5_scope_() );
+
+	if ( mmc5_scope_scratch.resize( frame_count * mmc5_scope_channel_count ) )
+		return "Out of memory";
+
+	long remain = frame_count;
+	while ( remain > 0 )
+	{
+		long avail = mmc5_scope_buffers [0].samples_avail();
+		if ( avail > remain )
+			avail = remain;
+
+		if ( avail == 0 )
+		{
+			blip_time_t clocks_emulated = mmc5_scope_buffers [0].center()->count_clocks( remain );
+			if ( clocks_emulated <= 0 )
+				clocks_emulated = (int32_t) mmc5_scope_buffers [0].length() * clock_rate_ / 1000;
+
+			int msec = int( clocks_emulated * 1000 / clock_rate_ );
+			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
+			for ( int i = 0; i < mmc5_scope_channel_count; ++i )
+				mmc5_scope_buffers [i].end_frame( clocks_emulated );
+			continue;
+		}
+
+		for ( int channel = 0; channel < mmc5_scope_channel_count; ++channel )
+		{
+			mmc5_scope_buffers [channel].read_samples(
+					&mmc5_scope_scratch [channel * frame_count],
+					avail
+			);
+		}
+
+		for ( long frame = 0; frame < avail; ++frame )
+		{
+			for ( int channel = 0; channel < mmc5_scope_channel_count; ++channel )
+				*out++ = mmc5_scope_scratch [channel * frame_count + frame];
 		}
 		remain -= avail;
 	}

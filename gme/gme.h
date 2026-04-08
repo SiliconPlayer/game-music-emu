@@ -257,6 +257,9 @@ BLARGG_EXPORT int gme_multi_channel( Music_Emu const* );
 /* True if this NSF/NSFE emulator currently has Konami VRC6 expansion audio active. */
 BLARGG_EXPORT int gme_nsf_has_vrc6( Music_Emu const* );
 
+/* True if this NSF/NSFE emulator currently has MMC5 expansion audio active. */
+BLARGG_EXPORT int gme_nsf_has_mmc5( Music_Emu const* );
+
 /* Set the mute mask for the dedicated NSF VRC6 scope path in voice-name order:
  * bit 0 = Saw Wave, bit 1 = Square 3, bit 2 = Square 4. */
 BLARGG_EXPORT void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu*, int mask );
@@ -268,6 +271,18 @@ BLARGG_EXPORT gme_err_t gme_play_nsf_vrc6_scope( Music_Emu*, int frame_count, sh
 
 /* Clear any unread samples queued by gme_play_nsf_vrc6_scope() on a dedicated shadow emulator. */
 BLARGG_EXPORT void gme_clear_nsf_vrc6_scope( Music_Emu* );
+
+/* Set the mute mask for the dedicated NSF MMC5 scope path in voice-name order:
+ * bit 0 = Square 3, bit 1 = Square 4, bit 2 = PCM. */
+BLARGG_EXPORT void gme_set_nsf_mmc5_scope_mute_mask( Music_Emu*, int mask );
+
+/* Generate frame_count mono scope samples for the three MMC5 oscillators, advancing the
+ * emulator like gme_play(). Output layout is frame-major in voice-name order:
+ * [Square 3, Square 4, PCM]. Intended for dedicated shadow emulators. */
+BLARGG_EXPORT gme_err_t gme_play_nsf_mmc5_scope( Music_Emu*, int frame_count, short out [] );
+
+/* Clear any unread samples queued by gme_play_nsf_mmc5_scope() on a dedicated shadow emulator. */
+BLARGG_EXPORT void gme_clear_nsf_mmc5_scope( Music_Emu* );
 
 /******** Advanced file loading ********/
 
